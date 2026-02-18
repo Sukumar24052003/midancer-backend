@@ -11,6 +11,11 @@ let apiInstance = new Brevo.TransactionalEmailsApi();
 let apiKey = apiInstance.authentications['apiKey'];
 apiKey.apiKey = process.env.BREVO_API_KEY; // This pulls the key you just added to Render
 
+// NEW: Health Check Route for Render
+app.get("/", (req, res) => {
+  res.status(200).send("Mídancer Backend is Live! 🚀");
+});
+
 // 2. The OTP Endpoint
 app.post("/send-otp", async (req, res) => {
   const { email, otp } = req.body;
@@ -45,6 +50,7 @@ app.post("/send-otp", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+// UPDATED: Bind to 0.0.0.0 so Render can detect the port
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Mídancer Backend running on port ${PORT}`);
 });
