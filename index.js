@@ -1,22 +1,15 @@
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
 const express = require("express");
 const cors = require("cors");
-const nodemailer = require("nodemailer");
+const Brevo = require('@getbrevo/brevo');
 
-admin.initializeApp();
 const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json());
 
-// 1. Setup Nodemailer - FIXED SENDER
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'sukumarssoni@gmail.com', // Always the sender
-    pass: 'manquzgiwjdupwty'        // Your 16-character App Password (no spaces)
-  }
-});
+// 1. Setup Brevo API Client using your Render Environment Variable
+let apiInstance = new Brevo.TransactionalEmailsApi();
+let apiKey = apiInstance.authentications['apiKey'];
+apiKey.apiKey = process.env.BREVO_API_KEY; // This pulls the key you just added to Render
 
 // 2. The OTP Endpoint
 app.post("/send-otp", async (req, res) => {
@@ -26,37 +19,32 @@ app.post("/send-otp", async (req, res) => {
     return res.status(400).send({ success: false, error: "Missing email or otp" });
   }
 
-  const mailOptions = {
-    from: '"Mídancer" <sukumarssoni@gmail.com>',
-    to: email, // This sends it to the user's registered address
-    subject: 'Your Mídancer Verification Code',
-    text: `Your 6-digit verification code is: ${otp}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee;">
-        <h2 style="color: #6200EE;">Mídancer Verification</h2>
-        <p>Your 6-digit verification code is:</p>
-        <h1 style="letter-spacing: 5px; color: #333;">${otp}</h1>
-        <p>This code will expire shortly. Do not share this with anyone.</p>
-      </div>
-    `
-  };
+  // Define the email content
+  let sendSmtpEmail = new Brevo.SendSmtpEmail();
+  sendSmtpEmail.subject = "Your Mídancer Verification Code";
+  sendSmtpEmail.htmlContent = `
+    <div style="font-family: Arial, sans-serif; text-align: center;">
+      <h2>Mídancer Verification</h2>
+      <p>Your 6-digit OTP code is:</p>
+      <h1 style="color: #6200EE; letter-spacing: 5px;">${otp}</h1>
+      <p>This code is valid for 10 minutes. Please do not share it.</p>
+    </div>
+  `;
+  // IMPORTANT: Ensure this email is a "Verified Sender" in your Brevo Dashboard
+  sendSmtpEmail.sender = { "name": "Mídancer", "email": "sukumarssoni@gmail.com" }; 
+  sendSmtpEmail.to = [{ "email": email }];
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Success! Email sent to ${email}`);
-    console.log(`Response: ${info.response}`);
+    await apiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`✅ Success! OTP sent to ${email} via Brevo API`);
     res.status(200).send({ success: true });
   } catch (error) {
-    console.error("❌ Email Error:", error);
-    res.status(500).send({ success: false, error: error.message });
+    console.error("❌ Brevo API Error:", error);
+    res.status(500).send({ success: false, error: "Failed to send email. Check Render logs." });
   }
 });
 
-// 3. Start the server locally for testing
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
+  console.log(`🚀 Mídancer Backend running on port ${PORT}`);
 });
-
-// For Firebase Deployment
-exports.api = functions.https.onRequest(app);
